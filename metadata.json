@@ -1,0 +1,8 @@
+{
+  "name": "ClipMind",
+  "description": "Review, tonton, dan clipping video YouTube panjang dengan bantuan Gemini AI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
