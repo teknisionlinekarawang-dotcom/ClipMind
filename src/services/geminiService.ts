@@ -208,7 +208,8 @@ export async function uploadLocalMp4Video(
 }
 
 export async function exportLocalClipMp4(params: {
-  localVideoId: string;
+  localVideoId?: string;
+  youtubeUrl?: string;
   clip: VirtualClip;
   burnSubtitles?: boolean;
   includeVoiceOver?: boolean;

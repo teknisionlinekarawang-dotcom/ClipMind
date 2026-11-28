@@ -76,6 +76,9 @@ di Python, Node tidak memproses.
   -> `SummaryData` (judul, tldr, poin_penting[], bab[], topik[], durasi_total_detik) — **AI ringkasan jalan di Python**.
 - `POST /highlights` `{ youtube_url | file_path, focus_query, duration_hint }`
   -> `HighlightItem[]` (judul, mulai, selesai, kategori, skor_viral, alasan, hook_saran) — **AI pencari klip jalan di Python**.
+- `POST /download-video` `{ youtube_url, dest_path }` -> `{ path, sizeBytes }`
+  -> unduh video YouTube penuh (video+audio, MP4) ke `dest_path` (folder UPLOAD_DIR Node)
+  supaya **klip dari URL YouTube bisa diekspor MP4** lewat pipeline render Node.
 
 > Node (`server.ts`) hanya mem-proxy `/api/analyze/{transcript,summary,highlights}` ke Python.
 > LLM yang dipakai Python = `CLIPMIND_LLM_*` atau fallback `GEMINI_API_KEY` (gemini-2.5-flash).

@@ -61,6 +61,7 @@ import {
   safeParseGeminiJson,
 } from './src/utils/validators.ts';
 import {
+  ensureYouTubeLocalRecord,
   mapToTranscriptSegments,
   pythonHighlights,
   pythonSummary,
@@ -496,23 +497,40 @@ app.post('/api/local-video/export-mp4', async (req, res) => {
   try {
     const {
       localVideoId,
+      youtubeUrl,
       clip,
       burnSubtitles = true,
       includeVoiceOver = true,
     } = req.body as {
-      localVideoId: string;
+      localVideoId?: string;
+      youtubeUrl?: string;
       clip: VirtualClip;
       burnSubtitles?: boolean;
       includeVoiceOver?: boolean;
     };
 
-    if (!localVideoId || !clip) {
-      res.status(400).json({ error: 'Parameter klip atau video lokal tidak lengkap.' });
+    // Sumber: video lokal yang sudah diunggah, ATAU URL YouTube (diunduh penuh via Python
+    // lalu didaftarkan sbg rekaman lokal) supaya klip YouTube ikut bisa diekspor MP4.
+    let sourceId = localVideoId;
+    if (!sourceId && youtubeUrl) {
+      try {
+        const rec = await ensureYouTubeLocalRecord(String(youtubeUrl));
+        sourceId = rec.localId;
+      } catch (err) {
+        res.status(502).json({
+          error: `Gagal menyiapkan video YouTube untuk render: ${err instanceof Error ? err.message : String(err)}`,
+        });
+        return;
+      }
+    }
+
+    if (!sourceId || !clip) {
+      res.status(400).json({ error: 'Parameter klip atau sumber video tidak lengkap.' });
       return;
     }
 
     const rendered = await renderEditedClipMp4({
-      localId: localVideoId,
+      localId: sourceId,
       clip,
       burnSubtitles,
       includeVoiceOver,

@@ -1,7 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 import type { HighlightItem, SummaryData, TranscriptSegment } from '../types.ts';
-import { getLocalVideoRecord } from './localVideo.ts';
+import {
+  getLocalVideoRecord,
+  registerUploadedLocalVideo,
+  UPLOAD_DIR,
+  type LocalVideoRecord,
+} from './localVideo.ts';
+import { extractYouTubeVideoId } from '../utils/youtube.ts';
 
 const TRANSCRIBER_URL = (process.env.TRANSCRIBER_URL || 'http://127.0.0.1:8790').replace(
   /\/+$/,
@@ -120,6 +126,43 @@ export async function pythonHighlights(params: {
     duration_hint: params.durationHint ?? null,
   };
   return callTranscriber<HighlightItem[]>('/highlights', body, params.timeoutMs);
+}
+
+// Cache: videoId YouTube -> localId rekaman yang sudah diunduh penuh (hindari unduh ulang).
+const ytRecordCache = new Map<string, string>();
+
+/**
+ * Siapkan rekaman MP4 lokal dari URL YouTube (unduh penuh via Python), agar klip bisa
+ * dirender ke MP4 memakai pipeline render yang sama seperti video lokal.
+ */
+export async function ensureYouTubeLocalRecord(youtubeUrl: string): Promise<LocalVideoRecord> {
+  const vid = extractYouTubeVideoId(youtubeUrl);
+  if (vid) {
+    const cached = ytRecordCache.get(vid);
+    if (cached) {
+      const existing = getLocalVideoRecord(cached);
+      if (existing) return existing;
+    }
+  }
+  const localId = `local-yt-${vid || Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const destPath = path.resolve(path.join(UPLOAD_DIR, `${localId}.mp4`));
+  const res = await callTranscriber<{ path: string; sizeBytes: number }>(
+    '/download-video',
+    { youtube_url: youtubeUrl, dest_path: destPath },
+    10 * 60 * 1000
+  );
+  const filePath = res.path || destPath;
+  if (!fs.existsSync(filePath)) {
+    throw new Error('Video YouTube hasil unduhan tidak ditemukan di server.');
+  }
+  const record = await registerUploadedLocalVideo({
+    localId,
+    filePath,
+    filename: `yt-${vid || 'video'}.mp4`,
+    sizeBytes: res.sizeBytes || fs.statSync(filePath).size,
+  });
+  if (vid) ytRecordCache.set(vid, localId);
+  return record;
 }
 
 /** Petakan hasil Whisper -> TranscriptSegment (kontrak ClipMind). Tanpa label pembicara. */

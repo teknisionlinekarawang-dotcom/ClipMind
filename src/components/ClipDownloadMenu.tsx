@@ -57,17 +57,20 @@ export function ClipDownloadMenu() {
   const slug = sanitizeFileSlug(selectedClip.judul);
   const hasSubtitle = selectedClip.subtitle.length > 0;
   const hasVoAudio = Boolean(selectedClip.naskahVO.audioBase64Pcm);
-  const isLocalMp4 = sourceType === 'local' && Boolean(localVideoId);
+  const canExportMp4 =
+    (sourceType === 'local' && Boolean(localVideoId)) ||
+    (sourceType === 'youtube' && Boolean(youtubeUrl));
 
   const ed = normalizeClipEditing(selectedClip.editing);
   const editTags = summarizeClipEdits(selectedClip);
 
   const handleDownloadMp4 = async () => {
-    if (!localVideoId) return;
+    if (!canExportMp4) return;
     setRenderingMp4(true);
     try {
       const mp4Blob = await exportLocalClipMp4({
-        localVideoId,
+        localVideoId: sourceType === 'local' ? localVideoId || undefined : undefined,
+        youtubeUrl: sourceType === 'youtube' ? youtubeUrl || undefined : undefined,
         clip: selectedClip,
         burnSubtitles: hasSubtitle && ed.burnSubtitles,
         includeVoiceOver: hasVoAudio && ed.includeVoiceOver,
@@ -154,7 +157,7 @@ export function ClipDownloadMenu() {
           aria-label="Opsi unduhan aset klip"
           className="absolute right-0 mt-2 w-76 rounded-xl border border-white/12 bg-[#141926] p-2 shadow-2xl z-50 space-y-1 text-xs"
         >
-          {isLocalMp4 && (
+          {canExportMp4 && (
             <button
               type="button"
               role="menuitem"
@@ -311,9 +314,9 @@ export function ClipDownloadMenu() {
               Edit aktif: {editTags.join(' · ')}
             </p>
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              {isLocalMp4
-                ? 'Ekspor MP4 menerapkan trim, orientasi, crop/zoom, warna, kecepatan, fade, subtitle, dan voice over dalam format H.264/AAC siap re-upload.'
-                : 'Mengunduh aset hasil edit klip (subtitle, voice over, thumbnail, metadata & skrip FFmpeg). Video asli YouTube tidak diunduh untuk menghormati hak cipta.'}
+              {canExportMp4
+                ? 'Ekspor MP4 menerapkan trim, orientasi, crop/zoom, warna, kecepatan, fade, subtitle, dan voice over dalam format H.264/AAC siap re-upload. Untuk klip YouTube, video diunduh sementara di server lalu dirender.'
+                : 'Mengunduh aset hasil edit klip (subtitle, voice over, thumbnail, metadata & skrip FFmpeg).'}
             </p>
           </div>
         </div>

@@ -152,9 +152,13 @@ export function StudioEditSubTab() {
     const slug = sanitizeFileSlug(selectedClip.judul);
     setExporting(true);
     try {
-      if (sourceType === 'local' && localVideoId) {
+      const canMp4 =
+        (sourceType === 'local' && Boolean(localVideoId)) ||
+        (sourceType === 'youtube' && Boolean(youtubeUrl));
+      if (canMp4) {
         const mp4Blob = await exportLocalClipMp4({
-          localVideoId,
+          localVideoId: sourceType === 'local' ? localVideoId || undefined : undefined,
+          youtubeUrl: sourceType === 'youtube' ? youtubeUrl || undefined : undefined,
           clip: selectedClip,
           burnSubtitles: ed.burnSubtitles && selectedClip.subtitle.length > 0,
           includeVoiceOver:

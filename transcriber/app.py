@@ -34,6 +34,7 @@ import json
 import time
 import base64
 import hashlib
+import shutil
 import threading
 import tempfile
 import urllib.request
@@ -701,6 +702,51 @@ def transcribe(req: TranscribeReq):
         "refined": bool(full.get("refined", False)),
         "cached": key in _cache,
     }
+
+
+class DownloadVideoReq(BaseModel):
+    youtube_url: str
+    dest_path: str  # path absolut (folder UPLOAD_DIR Node) tempat mp4 disimpan
+
+
+@app.post("/download-video")
+def download_video(req: DownloadVideoReq):
+    """Unduh video YouTube penuh (video+audio, MP4) ke dest_path utk dirender Node."""
+    try:
+        from yt_dlp import YoutubeDL
+    except Exception as e:  # pragma: no cover
+        raise HTTPException(status_code=500, detail=f"yt-dlp tidak terpasang: {e}")
+    dest = os.path.abspath(req.dest_path)
+    d = os.path.dirname(dest)
+    os.makedirs(d, exist_ok=True)
+    opts = {
+        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best",
+        "merge_output_format": "mp4",
+        "outtmpl": dest + ".%(ext)s",
+        "quiet": True,
+        "no_warnings": True,
+        "noplaylist": True,
+        "restrictfilenames": True,
+        "js_runtimes": {"node": {}},
+    }
+    try:
+        with YoutubeDL(opts) as ydl:
+            ydl.extract_info(req.youtube_url, download=True)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Gagal mengunduh video YouTube: {e}")
+    produced = dest + ".mp4"
+    if not os.path.exists(produced):
+        base = os.path.basename(dest)
+        cands = [f for f in os.listdir(d) if f.startswith(base + ".")]
+        if not cands:
+            raise HTTPException(status_code=502, detail="File video tidak dihasilkan yt-dlp.")
+        produced = os.path.join(d, cands[0])
+    if os.path.abspath(produced) != dest:
+        try:
+            os.replace(produced, dest)
+        except OSError:
+            shutil.move(produced, dest)
+    return {"path": dest, "sizeBytes": os.path.getsize(dest)}
 
 
 def main() -> None:

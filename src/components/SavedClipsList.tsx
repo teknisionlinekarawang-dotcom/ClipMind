@@ -62,13 +62,18 @@ export function SavedClipsList() {
     }
   };
 
+  const canExportMp4 =
+    (sourceType === 'local' && Boolean(localVideoId)) ||
+    (sourceType === 'youtube' && Boolean(youtubeUrl));
+
   const handleDownloadClipMp4 = async (clip: VirtualClip) => {
-    if (!localVideoId) return;
+    if (!canExportMp4) return;
     setRenderingMp4Id(clip.id);
     const ed = normalizeClipEditing(clip.editing);
     try {
       const mp4Blob = await exportLocalClipMp4({
-        localVideoId,
+        localVideoId: sourceType === 'local' ? localVideoId || undefined : undefined,
+        youtubeUrl: sourceType === 'youtube' ? youtubeUrl || undefined : undefined,
         clip,
         burnSubtitles: clip.subtitle.length > 0 && ed.burnSubtitles,
         includeVoiceOver: Boolean(clip.naskahVO.audioBase64Pcm) && ed.includeVoiceOver,
@@ -224,7 +229,7 @@ export function SavedClipsList() {
                   >
                     <Play className="h-3.5 w-3.5" />
                   </button>
-                  {sourceType === 'local' && localVideoId && (
+                  {canExportMp4 && (
                     <button
                       type="button"
                       disabled={renderingMp4Id === clip.id}

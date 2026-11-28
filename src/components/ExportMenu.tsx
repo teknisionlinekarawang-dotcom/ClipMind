@@ -127,18 +127,20 @@ export function ExportMenu() {
             <span className="font-mono text-[11px] text-slate-400">.md</span>
           </button>
 
-          {sourceType === 'local' && localVideoId && (
+          {((sourceType === 'local' && localVideoId) ||
+            (sourceType === 'youtube' && youtubeUrl)) && (
             <button
               type="button"
               role="menuitem"
               disabled={!selectedClip || renderingClipMp4}
               onClick={async () => {
-                if (!selectedClip || !localVideoId) return;
+                if (!selectedClip) return;
                 setRenderingClipMp4(true);
                 const ed = normalizeClipEditing(selectedClip.editing);
                 try {
                   const mp4Blob = await exportLocalClipMp4({
-                    localVideoId,
+                    localVideoId: sourceType === 'local' ? localVideoId || undefined : undefined,
+                    youtubeUrl: sourceType === 'youtube' ? youtubeUrl || undefined : undefined,
                     clip: selectedClip,
                     burnSubtitles: selectedClip.subtitle.length > 0 && ed.burnSubtitles,
                     includeVoiceOver:
