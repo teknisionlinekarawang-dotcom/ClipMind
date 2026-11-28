@@ -347,7 +347,11 @@ export function buildVideoFilterChain(params: {
 
   // 5. Burn ASS subtitles at original clip PTS BEFORE speed scaling
   if (assSubtitlePath) {
-    vfFilters.push(`ass=${assSubtitlePath}`);
+    // ffmpeg filtergraph memperlakukan '\' sbg escape dan ':' sbg pemisah opsi.
+    // Ubah backslash -> forward slash, lalu escape ':' (mis. C:/tmp -> C\:/tmp)
+    // agar path Windows tidak hancur saat dibaca libass.
+    const assEsc = assSubtitlePath.replace(/\\/g, '/').replace(/:/g, '\\:');
+    vfFilters.push(`ass=${assEsc}`);
   }
 
   // 6. Playback speed

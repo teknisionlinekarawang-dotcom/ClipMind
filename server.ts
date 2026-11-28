@@ -60,6 +60,13 @@ import {
   clampTimestamps,
   safeParseGeminiJson,
 } from './src/utils/validators.ts';
+import {
+  mapToTranscriptSegments,
+  pythonHighlights,
+  pythonSummary,
+  pythonTranscribe,
+  transcriberEnabled,
+} from './src/server/transcriber.ts';
 import { extractYouTubeVideoId, normalizeYouTubeUrl } from './src/utils/youtube.ts';
 import type {
   AIProviderId,
@@ -571,8 +578,28 @@ app.post('/api/analyze/summary', async (req, res) => {
     };
 
     const src = resolveVideoSource({ youtubeUrl, localVideoId });
-    const ctx = extractRequestAIContext(req.headers);
 
+    // Jalur utama: ringkasan dibuat DI PYTHON (transkrip Whisper + AI), Node hanya proxy.
+    if (transcriberEnabled()) {
+      try {
+        const summary = await pythonSummary({
+          youtubeUrl: src.youtubeUrl,
+          localVideoId: src.localVideoId,
+          style,
+          length,
+          durationHint,
+        });
+        res.json(summary);
+      } catch (err) {
+        res.status(503).json({
+          error: `Ringkasan (Python) gagal: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      }
+      return;
+    }
+
+    // Fallback (hanya bila USE_PY_TRANSCRIBE=false): AI via Node seperti semula.
+    const ctx = extractRequestAIContext(req.headers);
     const rawText = await generateWithActiveProvider({
       ctx,
       mode,
@@ -631,8 +658,27 @@ app.post('/api/analyze/highlights', async (req, res) => {
     };
 
     const src = resolveVideoSource({ youtubeUrl, localVideoId });
-    const ctx = extractRequestAIContext(req.headers);
 
+    // Jalur utama: highlight dicari DI PYTHON (transkrip Whisper + AI), Node hanya proxy.
+    if (transcriberEnabled()) {
+      try {
+        const list = await pythonHighlights({
+          youtubeUrl: src.youtubeUrl,
+          localVideoId: src.localVideoId,
+          focusQuery,
+          durationHint,
+        });
+        res.json(list);
+      } catch (err) {
+        res.status(503).json({
+          error: `Highlight (Python) gagal: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      }
+      return;
+    }
+
+    // Fallback (hanya bila USE_PY_TRANSCRIBE=false): AI via Node seperti semula.
+    const ctx = extractRequestAIContext(req.headers);
     const rawText = await generateWithActiveProvider({
       ctx,
       mode,
@@ -688,6 +734,39 @@ app.post('/api/analyze/transcript', async (req, res) => {
     };
 
     const src = resolveVideoSource({ youtubeUrl, localVideoId });
+
+    // Jalur utama: transkripsi lokal via Python (faster-whisper).
+    // Mode 'visual_narration' (membuat skrip narasi, bukan transkrip) tetap memakai AI.
+    // Transkripsi SELALU via Python (faster-whisper) bila diaktifkan. Tidak ada fallback AI:
+    // bila service mati, kembalikan error jelas agar user menyalakannya (bukan senyap ke AI).
+    if (transcriberEnabled() && transcriptMode !== 'visual_narration') {
+      try {
+        const py = await pythonTranscribe({
+          youtubeUrl: src.youtubeUrl,
+          localVideoId: src.localVideoId,
+          startSec,
+          endSec,
+        });
+        const segs = mapToTranscriptSegments(py);
+        const maxDur =
+          durationHint && durationHint > 0
+            ? durationHint
+            : py.duration && py.duration > 0
+            ? py.duration
+            : Math.max(endSec, 86400);
+        res.json(clampTimestamps(segs, maxDur));
+      } catch (err) {
+        const url = process.env.TRANSCRIBER_URL || 'http://127.0.0.1:8790';
+        res.status(503).json({
+          error:
+            `Layanan transkripsi Python tidak dapat dihubungi (${url}). ` +
+            `Jalankan: .\\transcriber\\run-transcriber.ps1 — lalu ulangi. ` +
+            `(Detail: ${err instanceof Error ? err.message : String(err)})`,
+        });
+      }
+      return;
+    }
+
     const ctx = extractRequestAIContext(req.headers);
 
     let rawText = '';
@@ -1479,7 +1558,8 @@ Sertakan ringkasan perbandingan, kesimpulan video mana yang lebih padat/akurat, 
 });
 
 async function startServer() {
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
+  const HOST = process.env.HOST || '0.0.0.0';
   const isProd = process.env.NODE_ENV === 'production';
 
   if (!isProd) {
@@ -1497,8 +1577,8 @@ async function startServer() {
     });
   }
 
-  const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`ClipMind server berjalan di http://0.0.0.0:${PORT}`);
+  const server = app.listen(PORT, HOST, () => {
+    console.log(`ClipMind server berjalan di http://localhost:${PORT}`);
   });
   server.requestTimeout = 10 * 60 * 1000;
   server.headersTimeout = 60 * 1000;

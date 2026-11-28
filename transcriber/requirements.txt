@@ -1,0 +1,8 @@
+# ClipMind Python transcriber — dependency
+# Python 3.12 direkomendasikan (3.13/3.15 belum punya wheel ctranslate2 stabil).
+faster-whisper==1.2.1
+# av 19.x menghapus metadata_errors dan membuat faster-whisper 1.2.1 crash -> pin.
+av==16.1.0
+fastapi>=0.115
+uvicorn[standard]>=0.30
+yt-dlp>=2025.1.1

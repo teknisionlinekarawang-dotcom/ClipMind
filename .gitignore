@@ -6,3 +6,10 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Python transcriber
+transcriber/.venv/
+transcriber/__pycache__/
+transcriber/models/
+__pycache__/
+*.pyc
